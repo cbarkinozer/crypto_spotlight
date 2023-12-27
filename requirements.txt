@@ -1,2 +1,6 @@
 streamlit==1.21.0
 snscrape==0.7.0.20230622
+langchain==0.0.249
+pytube==15.0.0
+youtube-transcript-api==0.6.2
+textblob==0.17.1
