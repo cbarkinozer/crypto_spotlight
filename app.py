@@ -38,65 +38,66 @@ def analyze_twitter():
     
 
 def analyze_youtube():
-    global last_update_time
-    global coin_list
+    global last_update_time, coin_list
 
     st.title("Youtube")
-    url = st.text_input("Enter the url of the Youtube video (e.g https://www.youtube.com/watch?v=i2RTXJqy1j8):").strip()
+    url = st.text_input("Enter the YouTube video URL (e.g., https://www.youtube.com/watch?v=i2RTXJqy1j8):").strip()
     button_clicked = st.button("Get Analysis!")
+
     if button_clicked:
-        
-            loader = YoutubeLoader.from_youtube_url(
-                url, add_video_info=True,
-                language=["en","tr"],
-                translation="en",
-            )
-            doc_list = loader.load()
-            
-            current_time = datetime.datetime.now()
-            # Check if 24 hours have passed since the last update
-            time_difference = current_time - last_update_time
-            if time_difference.total_seconds() >= 24 * 60 * 60:
-                coin_list = __get_top_crypto_names()
-                last_update_time = current_time
-            
-            text = doc_list[0].page_content.lower()
-            
-            st.write("Title: ", doc_list[0].metadata['title'])
-            st.write("Account: ", doc_list[0].metadata['author'])
-            st.write("View Count: ",doc_list[0].metadata['view_count'])
-            st.write("Publish Date: ", doc_list[0].metadata['publish_date'])
-            st.write("Transcription : ", text)
-            
+        loader = YoutubeLoader.from_youtube_url(url, add_video_info=True, language=["en", "tr"], translation="en")
+        doc_list = loader.load()
 
-            progress_bar = st.progress(0)
+        current_time = datetime.datetime.now()
+        __update_coin_list(current_time)
 
-            with st.spinner("Please wait, analyzing the video..."):
-                total_detected_coins = []
-                chunk_size = 500
+        text = doc_list[0].page_content.lower()
+        __display_video_info(doc_list[0])
 
-                for i in range(0, len(text), chunk_size):
-                    progress_percentage = min(100, (i + chunk_size) / len(text) * 100)
-                    progress_fraction = progress_percentage / 100  # Convert to fraction
-                    progress_bar.progress(progress_fraction)
+        with st.spinner("Please wait, analyzing the video..."):
+            total_detected_coins = __analyze_text(text)
 
-                    translated_chunk = ts.translate_text(text[i:i + chunk_size], translator="bing", to_language="en").lower()
-                    #print("TRANSLATED CHUNK: ", translated_chunk)
-                    detected_coins = []
-                    for coin in coin_list:
-                        if f' {coin} ' in translated_chunk:
-                            detected_coins.append(coin)
-                    total_detected_coins.extend(detected_coins)
+            if not total_detected_coins:
+                st.write("No coins detected.")
 
-                    if detected_coins:
-                        __analyze_text_chunks(translated_chunk, detected_coins)
+def __update_coin_list(current_time):
+    global last_update_time, coin_list
 
-                if not total_detected_coins:
-                    st.write("No coins detected.")
+    time_difference = current_time - last_update_time
+    if time_difference.total_seconds() >= 24 * 60 * 60:
+        coin_list = __get_top_crypto_names()
+        last_update_time = current_time
 
-            
+def __display_video_info(video_info):
+    st.write("Title: ", video_info.metadata['title'])
+    st.write("Account: ", video_info.metadata['author'])
+    st.write("View Count: ", video_info.metadata['view_count'])
+    st.write("Publish Date: ", video_info.metadata['publish_date'])
+    st.write("Transcription: ", video_info.page_content.lower())
 
-            
+def __analyze_text(text):
+    global coin_list
+
+    total_detected_coins = []
+    chunk_size = 500
+
+    progress_bar = st.progress(0)
+
+    for i in range(0, len(text), chunk_size):
+        progress_percentage = min(100, (i + chunk_size) / len(text) * 100)
+        progress_fraction = progress_percentage / 100
+        progress_bar.progress(progress_fraction)
+
+        translated_chunk = ts.translate_text(text[i:i + chunk_size], translator="bing", to_language="en").lower()
+        print(translated_chunk)
+        detected_coins = [coin for coin in coin_list if f' {coin}' in translated_chunk]
+        total_detected_coins.extend(detected_coins)
+
+        if detected_coins:
+            __analyze_text_chunks(translated_chunk, detected_coins)
+
+    return total_detected_coins
+
         
 def __analyze_text_chunks(text_chunk, detected_coins):
     analysis = TextBlob(text_chunk)
