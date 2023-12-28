@@ -80,8 +80,11 @@ def analyze_youtube():
                     progress_bar.progress(progress_fraction)
 
                     translated_chunk = ts.translate_text(text[i:i + chunk_size], translator="bing", to_language="en").lower()
-                    print(translated_chunk)
-                    detected_coins = [coin for coin in coin_list if f' {coin} ' in translated_chunk]
+                    #print("TRANSLATED CHUNK: ", translated_chunk)
+                    detected_coins = []
+                    for coin in coin_list:
+                        if f' {coin} ' in translated_chunk:
+                            detected_coins.append(coin)
                     total_detected_coins.extend(detected_coins)
 
                     if detected_coins:
@@ -127,7 +130,8 @@ def get_top_crypto_names():
 
     if response.status_code == 200:
         data = response.json()
-        coin_names = [coin['name'] for coin in data]
+        coin_names = [coin['name'].lower() for coin in data]
+        coin_names.remove('just')
         return coin_names
     else:
         print(f"Failed to fetch data. Status code: {response.status_code}")
