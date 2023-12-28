@@ -213,9 +213,10 @@ def main():
         
 
 if __name__ == "__main__":
-
-
-    main() # streamlit run app.py
+    try:
+        main() # streamlit run app.py
+    except Exception as e:
+        st.error(e)
     
     footer_html = """
         <div style="text-align:center; padding: 10px; border-top: 1px solid #d3d3d3;">
