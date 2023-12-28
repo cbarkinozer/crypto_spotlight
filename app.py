@@ -6,6 +6,8 @@ import requests
 from textblob import TextBlob
 import translators as ts
 import utils
+import os
+import re
 
 last_update_time = datetime.datetime.now() - datetime.timedelta(hours=23)
 coin_dict = utils.coin_dict
@@ -213,12 +215,23 @@ def main():
         
 
 if __name__ == "__main__":
-    adsense_code = """
+
+    code = """<!-- Global site tag (gtag.js) - Google Analytics -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5003956999162311"
      crossorigin="anonymous"></script>
-     <head><meta name="google-adsense-account" content="ca-pub-5003956999162311"></head>
-    """
-    st.markdown(adsense_code, unsafe_allow_html=True)
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'UA-XXXXXXXXX');
+    </script>"""
+
+    a=os.path.dirname(st.__file__)+'/static/index.html'
+    with open(a, 'r') as f:
+        data=f.read()
+    if len(re.findall('UA-', data))==0:
+        with open(a, 'w') as ff:
+            newdata=re.sub('<head>','<head>'+code,data)
+            ff.write(newdata)
     try:
         main() # streamlit run app.py
     except Exception as e:
