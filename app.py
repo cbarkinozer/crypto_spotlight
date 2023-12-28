@@ -89,7 +89,7 @@ def __analyze_text(text):
         progress_bar.progress(progress_fraction)
 
         translated_chunk = ts.translate_text(text[i:i + chunk_size], translator="bing", to_language="en").lower()
-        print(translated_chunk)
+        
         detected_coins = [coin for coin in coin_list if f' {coin}' in translated_chunk]
         total_detected_coins.extend(detected_coins)
 
@@ -113,7 +113,7 @@ def __analyze_text_chunks(text_chunk, detected_coins):
         color = "grey"
 
     st.write("Text: ",text_chunk)
-    st.write("Detected Coins: ",detected_coins)
+    st.write("Detected Coin: ",detected_coins)
     st.write(f"Detected guess: <span style='color:{color}'>{guess}</span>", unsafe_allow_html=True)
 
 
