@@ -216,6 +216,9 @@ def main():
 
 if __name__ == "__main__":
 
+    st.set_page_config(page_title='CryptoSpotlight', page_icon='page_icon.jpg', layout="centered", initial_sidebar_state="auto", menu_items=None)
+
+    # Adsense
     code = """<!-- Global site tag (gtag.js) - Google Analytics -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5003956999162311"
      crossorigin="anonymous"></script>
@@ -224,7 +227,6 @@ if __name__ == "__main__":
     gtag('js', new Date());
     gtag('config', 'UA-XXXXXXXXX');
     </script>"""
-
     a=os.path.dirname(st.__file__)+'/static/index.html'
     with open(a, 'r') as f:
         data=f.read()
@@ -232,12 +234,13 @@ if __name__ == "__main__":
         with open(a, 'w') as ff:
             newdata=re.sub('<head>','<head>'+code,data)
             ff.write(newdata)
+    # Main
     try:
         main() # streamlit run app.py
     except Exception as e:
         st.error(e)
         print(e)
-    
+    # Footer
     footer_html = """
         <div style="text-align:center; padding: 10px; border-top: 1px solid #d3d3d3;">
             <p style="font-size: 12px; color: #888;">Data powered by <a href="https://www.coingecko.com/" target="_blank" style="text-decoration: none; color: #6f6f6f;">CoinGecko</a></p>
