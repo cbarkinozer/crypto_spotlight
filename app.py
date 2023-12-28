@@ -12,9 +12,11 @@ coin_dict = utils.coin_dict
 
 def analyze_twitter():
     st.title("Twitter")
+    st.warning("Our Twitter service is coming soon...")
     
-    username = st.text_input("Enter the username of the Twitter account (e.g @TestUser):")
-    username = username.replace("@","").strip()
+    #username = st.text_input("Enter the username of the Twitter account (e.g @TestUser):")
+    #username = username.replace("@","").strip()
+    username = ""
 
     # Calculate the start and end timestamps for the 24-hour period
     now = datetime.datetime.now()
@@ -24,19 +26,19 @@ def analyze_twitter():
     # Create a query string with the username and date range
     query = f"from:{username} since:{start_time} until:{end_time}"
 
-    button_clicked = st.button("Get Analysis!")
+    #button_clicked = st.button("Get Analysis!")
 
-    if button_clicked:
-        tweets = []
-        st.subheader("Tweets:")
-        try:
-            for tweet in sntwitter.TwitterSearchScraper(query).get_items():
-                tweets.append(tweet.content)
-                st.write(tweet)
-                st.markdown("---")
-        except Exception as e:
-            st.error(f"Error fetching tweets: {e}")
-    
+    #if button_clicked:
+    #    tweets = []
+    #    st.subheader("Tweets:")
+    #    try:
+    #        for tweet in sntwitter.TwitterSearchScraper(query).get_items():
+    #            tweets.append(tweet.content)
+    #            st.write(tweet)
+    #            st.markdown("---")
+    #    except Exception as e:
+    #        st.error(f"Error fetching tweets: {e}")
+
 
 def analyze_youtube():
     global last_update_time, coin_dict
@@ -57,6 +59,7 @@ def analyze_youtube():
         __display_video_info(video_info)
 
         with st.spinner("Please wait, analyzing the video..."):
+            st.warning("Only the coins that are in the top 250 by market capitalization are detected by the system.")
             total_detected_coins = __analyze_text(text, video_info)
 
             if not total_detected_coins:
@@ -88,7 +91,6 @@ def __get_coins():
         coin_dict = {}
         for coin in data:
             coin_dict[coin['name'].lower()] = coin['id']
-        print(coin_dict)
         return coin_dict
     else:
         print(f"Failed to fetch data. Status code: {response.status_code}")
@@ -121,12 +123,19 @@ def __analyze_text(text, video_info):
         total_detected_coins.extend(detected_coins)
 
         if detected_coins:
-            __analyze_text_chunks(translated_chunk, detected_coins, video_info)
+            __analyze_text_chunks(translated_chunk, detected_coins)
+    
+    total_detected_coins = list(set(total_detected_coins))
+    
+    for coin in total_detected_coins:
+        percentage_change = get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
+        color_change = 'green' if percentage_change > 0 else 'red'
+        st.write(f"{coin}'s value change since then: <span style='color:{color_change}'>%{percentage_change}</span>", unsafe_allow_html=True)
 
     return total_detected_coins
 
         
-def __analyze_text_chunks(text_chunk, detected_coins, video_info):
+def __analyze_text_chunks(text_chunk, detected_coins):
     analysis = TextBlob(text_chunk)
     
     if analysis.sentiment.polarity > 0:
@@ -140,14 +149,10 @@ def __analyze_text_chunks(text_chunk, detected_coins, video_info):
         color = "grey"
 
     for coin in detected_coins:
-        percentage_change = get_coin_price_change(coin, video_info.metadata['publish_date'],datetime.datetime.now())
-        if percentage_change == 0:
-            continue
         st.write("Text: \n",text_chunk)
         st.write("Detected Coin: ",coin)
         st.write(f"Detected guess: <span style='color:{color}'>{guess}</span>", unsafe_allow_html=True)
-        color_change = 'green' if percentage_change > 0 else 'red'
-        st.write(f"Coin's value change since then: <span style='color:{color_change}'>%{percentage_change}</span>", unsafe_allow_html=True)
+        st.markdown("---")
 
 def get_coin_price_change(coin_name, start_date, end_date):
     
@@ -178,9 +183,9 @@ def get_coin_price_change(coin_name, start_date, end_date):
     # Send the API request
     response = requests.get(endpoint, params=params)
     data = response.json()
-    print(data)
 
     if ('prices' in data and data['prices']==[]) or ('prices' not in data):
+        st.warning(data)
         return 0
 
     # Extract prices from the response data
@@ -195,6 +200,8 @@ def get_coin_price_change(coin_name, start_date, end_date):
 
 
 def main():
+    st.write("Welcome to CryptoSpotlight. You can select a social media type bellow and get a content analysis for FREE.")
+    st.write("This system is NOT an investment advice, also there may be errors in the system as well.")
     tabs = ["Youtube", "Twitter"]
     active_tab = st.radio("Choose your operation:", tabs)
     
@@ -207,7 +214,6 @@ def main():
 
 if __name__ == "__main__":
 
-    # just, ordi, gas
 
     main() # streamlit run app.py
     
