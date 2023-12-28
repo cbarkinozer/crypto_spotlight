@@ -4,7 +4,7 @@ import datetime
 from langchain.document_loaders import YoutubeLoader
 import requests
 from textblob import TextBlob
-from googletrans import Translator
+import translators as ts
 
 last_update_time = datetime.datetime.now() - datetime.timedelta(hours=24)
 coin_list = []
@@ -42,17 +42,17 @@ def analyze_youtube():
     global coin_list
 
     st.title("Youtube")
-    url = st.text_input("Enter the url of the Youtube account (e.g https://www.youtube.com/watch?v=i2RTXJqy1j8):").strip()
+    url = st.text_input("Enter the url of the Youtube video (e.g https://www.youtube.com/watch?v=i2RTXJqy1j8):").strip()
     button_clicked = st.button("Get Analysis!")
     if button_clicked:
-        try:
+        
             loader = YoutubeLoader.from_youtube_url(
                 url, add_video_info=True,
                 language=["en","tr"],
                 translation="en",
             )
             doc_list = loader.load()
-            st.write("[DEBUG]",doc_list)
+            
             current_time = datetime.datetime.now()
 
             # Check if 24 hours have passed since the last update
@@ -61,29 +61,56 @@ def analyze_youtube():
                 coin_list = get_top_crypto_names()
                 last_update_time = current_time
             
-            text = doc_list[0].page_content
+            st.write("Title: ", doc_list[0].metadata['title'])
+            st.write("Account: ", doc_list[0].metadata['author'])
+            st.write("View Count: ",doc_list[0].metadata['view_count'])
+            st.write("Publish Date: ", doc_list[0].metadata['publish_date'])
             
-            detected_coins = [coin for coin in coin_list if any(coin in text for _ in doc_list)]
+            text = doc_list[0].page_content.lower()
 
-            analysis = TextBlob(text)
-    
-            # Classify polarity as positive, negative, or neutral
-            if analysis.sentiment.polarity > 0:
-                guess = "Bullish"
-                color = "green"
-            elif analysis.sentiment.polarity < 0:
-                guess = "Bearish"
-                color = "red"
-            else:
-                guess = "Neutral"
-                color = "grey"
+            progress_bar = st.progress(0)
 
-            st.write("Detected Coins: ",detected_coins)
-            st.write("[DEBUG] Coins:",coin_list)
-            st.write(f"Detected guess: <span style='color:{color}'>{guess}</span>", unsafe_allow_html=True)
-        except Exception as e:
-            st.write(str(e))
+            with st.spinner("Please wait, analyzing the video..."):
+                total_detected_coins = []
+                chunk_size = 500
+
+                for i in range(0, len(text), chunk_size):
+                    progress_percentage = min(100, (i + chunk_size) / len(text) * 100)
+                    progress_fraction = progress_percentage / 100  # Convert to fraction
+                    progress_bar.progress(progress_fraction)
+
+                    translated_chunk = ts.translate_text(text[i:i + chunk_size], translator="bing", to_language="en").lower()
+                    print(translated_chunk)
+                    detected_coins = [coin for coin in coin_list if f' {coin} ' in translated_chunk]
+                    total_detected_coins.extend(detected_coins)
+
+                    if detected_coins:
+                        analyze_text_chunks(translated_chunk, detected_coins)
+
+                if not total_detected_coins:
+                    st.write("No coins detected.")
+
+            
+
+            
+        
+def analyze_text_chunks(text_chunk, detected_coins):
+    analysis = TextBlob(text_chunk)
     
+    if analysis.sentiment.polarity > 0:
+        guess = "Bullish"
+        color = "green"
+    elif analysis.sentiment.polarity < 0:
+        guess = "Bearish"
+        color = "red"
+    else:
+        guess = "Neutral"
+        color = "grey"
+
+    st.write("Text: ",text_chunk)
+    st.write("Detected Coins: ",detected_coins)
+    st.write(f"Detected guess: <span style='color:{color}'>{guess}</span>", unsafe_allow_html=True)
+
 
 
 def get_top_crypto_names():
