@@ -54,19 +54,20 @@ def analyze_youtube():
             doc_list = loader.load()
             
             current_time = datetime.datetime.now()
-
             # Check if 24 hours have passed since the last update
             time_difference = current_time - last_update_time
             if time_difference.total_seconds() >= 24 * 60 * 60:
-                coin_list = get_top_crypto_names()
+                coin_list = __get_top_crypto_names()
                 last_update_time = current_time
+            
+            text = doc_list[0].page_content.lower()
             
             st.write("Title: ", doc_list[0].metadata['title'])
             st.write("Account: ", doc_list[0].metadata['author'])
             st.write("View Count: ",doc_list[0].metadata['view_count'])
             st.write("Publish Date: ", doc_list[0].metadata['publish_date'])
+            st.write("Transcription : ", text)
             
-            text = doc_list[0].page_content.lower()
 
             progress_bar = st.progress(0)
 
@@ -88,7 +89,7 @@ def analyze_youtube():
                     total_detected_coins.extend(detected_coins)
 
                     if detected_coins:
-                        analyze_text_chunks(translated_chunk, detected_coins)
+                        __analyze_text_chunks(translated_chunk, detected_coins)
 
                 if not total_detected_coins:
                     st.write("No coins detected.")
@@ -97,7 +98,7 @@ def analyze_youtube():
 
             
         
-def analyze_text_chunks(text_chunk, detected_coins):
+def __analyze_text_chunks(text_chunk, detected_coins):
     analysis = TextBlob(text_chunk)
     
     if analysis.sentiment.polarity > 0:
@@ -116,7 +117,7 @@ def analyze_text_chunks(text_chunk, detected_coins):
 
 
 
-def get_top_crypto_names():
+def __get_top_crypto_names():
     url = f'https://api.coingecko.com/api/v3/coins/markets'
     params = {
         'vs_currency': 'usd',
@@ -140,8 +141,8 @@ def get_top_crypto_names():
         
 
 def main():
-    tabs = ["Twitter", "Youtube"]
-    active_tab = st.radio("İşleminizi seçin:", tabs)
+    tabs = ["Youtube", "Twitter"]
+    active_tab = st.radio("Choose your operation:", tabs)
     
     if active_tab == "Twitter":
         analyze_twitter()
