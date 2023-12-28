@@ -213,10 +213,12 @@ def main():
         
 
 if __name__ == "__main__":
-    header_html = """
-        <meta name="google-adsense-account" content="ca-pub-5003956999162311">
+    adsense_code = """
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5003956999162311"
+     crossorigin="anonymous"></script>
+     <head><meta name="google-adsense-account" content="ca-pub-5003956999162311"></head>
     """
-    st.markdown(header_html, unsafe_allow_html=True)
+    st.markdown(adsense_code, unsafe_allow_html=True)
     try:
         main() # streamlit run app.py
     except Exception as e:
