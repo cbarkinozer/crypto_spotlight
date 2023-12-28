@@ -4,6 +4,7 @@ import datetime
 from langchain.document_loaders import YoutubeLoader
 import requests
 from textblob import TextBlob
+from googletrans import Translator
 
 last_update_time = datetime.datetime.now() - datetime.timedelta(hours=24)
 coin_list = []
@@ -41,13 +42,13 @@ def analyze_youtube():
     global coin_list
 
     st.title("Youtube")
-    url = st.text_input("Enter the username of the Youtube account (e.g https://www.youtube.com/watch?v=i2RTXJqy1j8):").strip()
+    url = st.text_input("Enter the url of the Youtube account (e.g https://www.youtube.com/watch?v=i2RTXJqy1j8):").strip()
     button_clicked = st.button("Get Analysis!")
     if button_clicked:
         try:
             loader = YoutubeLoader.from_youtube_url(
                 url, add_video_info=True,
-                language=["en", "tr"],
+                language=["en","tr"],
                 translation="en",
             )
             doc_list = loader.load()
@@ -60,10 +61,11 @@ def analyze_youtube():
                 coin_list = get_top_crypto_names()
                 last_update_time = current_time
             
-            detected_coins = [coin for coin in coin_list if any(coin in doc.page_content for doc in doc_list)]
-
+            text = doc_list[0].page_content
             
-            analysis = TextBlob(doc_list[0].page_content)
+            detected_coins = [coin for coin in coin_list if any(coin in text for _ in doc_list)]
+
+            analysis = TextBlob(text)
     
             # Classify polarity as positive, negative, or neutral
             if analysis.sentiment.polarity > 0:
@@ -119,3 +121,10 @@ def main():
 
 if __name__ == "__main__":
     main() # streamlit run app.py
+    
+    footer_html = """
+        <div style="text-align:center; padding: 10px; border-top: 1px solid #d3d3d3;">
+            <p style="font-size: 12px; color: #888;">Data powered by <a href="https://www.coingecko.com/" target="_blank" style="text-decoration: none; color: #6f6f6f;">CoinGecko</a></p>
+        </div>
+    """
+    st.markdown(footer_html, unsafe_allow_html=True)
