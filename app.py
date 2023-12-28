@@ -116,7 +116,7 @@ def __analyze_text(text, video_info):
         progress_fraction = progress_percentage / 100
         progress_bar.progress(progress_fraction)
 
-        translated_chunk = ts.translate_text(text[i:i + chunk_size], translator="bing", to_language="en").lower()
+        translated_chunk = ts.translate_text(text[i:i + chunk_size], translator="google", to_language="en").lower()
         
         detected_coins = [coin for coin in coin_dict.keys() if f' {coin}' in translated_chunk]
 
@@ -217,6 +217,7 @@ if __name__ == "__main__":
         main() # streamlit run app.py
     except Exception as e:
         st.error(e)
+        print(e)
     
     footer_html = """
         <div style="text-align:center; padding: 10px; border-top: 1px solid #d3d3d3;">
