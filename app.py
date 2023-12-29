@@ -6,8 +6,7 @@ import requests
 from textblob import TextBlob
 import translators as ts
 import utils
-import os
-import re
+import time
 
 last_update_time = datetime.datetime.now() - datetime.timedelta(hours=23)
 coin_dict = utils.coin_dict
@@ -120,7 +119,7 @@ def __analyze_text(text, video_info):
 
         translated_chunk = ts.translate_text(text[i:i + chunk_size], translator="google", to_language="en").lower()
         
-        detected_coins = [coin for coin in coin_dict.keys() if f' {coin}' in translated_chunk]
+        detected_coins = [coin for coin in coin_dict.keys() if f' {coin} ' in translated_chunk]
 
         total_detected_coins.extend(detected_coins)
 
@@ -129,8 +128,15 @@ def __analyze_text(text, video_info):
     
     total_detected_coins = list(set(total_detected_coins))
     
+    st.warning("Utilizing CoinGecko's free API, might take up to 2-3 minutes to finish.")
     for coin in total_detected_coins:
         percentage_change = get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
+        if percentage_change == 0:
+            while percentage_change == 0:
+                time.sleep(60)
+                percentage_change = get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
+        else:
+            time.sleep(5)
         color_change = 'green' if percentage_change > 0 else 'red'
         st.write(f"{coin}'s value change since then: <span style='color:{color_change}'>%{percentage_change}</span>", unsafe_allow_html=True)
 
@@ -187,7 +193,6 @@ def get_coin_price_change(coin_name, start_date, end_date):
     data = response.json()
 
     if ('prices' in data and data['prices']==[]) or ('prices' not in data):
-        st.warning(data)
         return 0
 
     # Extract prices from the response data
@@ -218,22 +223,6 @@ if __name__ == "__main__":
 
     st.set_page_config(page_title='CryptoSpotlight', page_icon='page_icon.jpg', layout="centered", initial_sidebar_state="auto", menu_items=None)
 
-    # Adsense
-    code = """<!-- Global site tag (gtag.js) - Google Analytics -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5003956999162311"
-     crossorigin="anonymous"></script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'UA-XXXXXXXXX');
-    </script>"""
-    a=os.path.dirname(st.__file__)+'/static/index.html'
-    with open(a, 'r') as f:
-        data=f.read()
-    if len(re.findall('UA-', data))==0:
-        with open(a, 'w') as ff:
-            newdata=re.sub('<head>','<head>'+code,data)
-            ff.write(newdata)
     # Main
     try:
         main() # streamlit run app.py
