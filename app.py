@@ -7,6 +7,10 @@ from textblob import TextBlob
 import translators as ts
 import utils
 import time
+from dotenv import load_dotenv
+import googleapiclient.discovery
+from googleapiclient.errors import HttpError
+import os
 
 last_update_time = datetime.datetime.now() - datetime.timedelta(hours=23)
 coin_dict = utils.coin_dict
@@ -40,7 +44,6 @@ def analyze_twitter():
     #    except Exception as e:
     #        st.error(f"Error fetching tweets: {e}")
 
-
 def analyze_youtube():
     global last_update_time, coin_dict
 
@@ -61,7 +64,7 @@ def analyze_youtube():
 
         with st.spinner("Please wait, analyzing the video..."):
             st.warning("Only the coins that are in the top 250 by market capitalization are detected by the system.")
-            total_detected_coins = __analyze_text(text, video_info)
+            total_detected_coins, _ = __analyze_text(text, video_info)
 
             if not total_detected_coins:
                 st.write("No coins detected.")
@@ -108,6 +111,7 @@ def __analyze_text(text, video_info):
     global coin_list
 
     total_detected_coins = []
+    analysis_result_list = []
     chunk_size = 500
 
     progress_bar = st.progress(0)
@@ -124,7 +128,8 @@ def __analyze_text(text, video_info):
         total_detected_coins.extend(detected_coins)
 
         if detected_coins:
-            __analyze_text_chunks(translated_chunk, detected_coins)
+            analysis_list = __analyze_text_chunks(translated_chunk, detected_coins)
+            analysis_result_list.append(analysis_list)
     
     total_detected_coins = list(set(total_detected_coins))
     
@@ -140,7 +145,7 @@ def __analyze_text(text, video_info):
         color_change = 'green' if percentage_change > 0 else 'red'
         st.write(f"{coin}'s value change since then: <span style='color:{color_change}'>%{percentage_change}</span>", unsafe_allow_html=True)
 
-    return total_detected_coins
+    return total_detected_coins, analysis_result_list
 
         
 def __analyze_text_chunks(text_chunk, detected_coins):
@@ -155,12 +160,17 @@ def __analyze_text_chunks(text_chunk, detected_coins):
     else:
         guess = "Neutral"
         color = "grey"
-
+    
+    analysis_list = []
+    
     for coin in detected_coins:
         st.write("Text: \n",text_chunk)
         st.write("Detected Coin: ",coin)
         st.write(f"Detected guess: <span style='color:{color}'>{guess}</span>", unsafe_allow_html=True)
+        analysis = utils.Analysis(text_chunk=text_chunk,coin=coin,guess=guess,color=color,date=None)
+        analysis_list.append(analysis)
         st.markdown("---")
+    return analysis_list
 
 def get_coin_price_change(coin_name, start_date, end_date):
     
@@ -205,23 +215,97 @@ def get_coin_price_change(coin_name, start_date, end_date):
 
     return percentage_change
 
+def influencer_comparison():
+    crypto_influencers=["cryptokemal","CoinBureau"]
+    st.write(crypto_influencers)
+    __get_influencer_comparison(crypto_influencers)
+    
+    
+
+
+def __get_influencer_comparison(crypto_influencers):
+    api_key = os.getenv('API_KEY')
+    for influencer_name in crypto_influencers:
+        video_urls = get_youtube_videos(api_key, influencer_name, max_results=10)
+        if video_urls == []:
+            st.warning("Influencer named {influencer_name} not found, continuining.")
+            continue
+        
+        for url in video_urls:
+            loader = YoutubeLoader.from_youtube_url(url, add_video_info=True, language=["en", "tr"], translation="en")
+            doc_list = loader.load()
+            video_info = doc_list[0]
+            video_info.metadata['publish_date']
+
+            current_time = datetime.datetime.now()
+            __update_coin_list(current_time)
+
+            
+            text = video_info.page_content.lower()
+            total_detected_coins, analysis_result_list = __analyze_text(text, video_info)
+
+    
+
+
+def get_youtube_videos(api_key, username, max_results=10):
+    youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=api_key)
+
+    try:
+        # Get channel ID from the username
+        channel_response = youtube.channels().list(
+            part="id",
+            forUsername=username
+        ).execute()
+
+        if not channel_response.get("items"):
+            print(f"Channel with username '{username}' not found.")
+            return []
+
+        channel_id = channel_response["items"][0]["id"]
+
+        # Get the last 10 videos from the channel
+        videos_response = youtube.search().list(
+            part="id",
+            channelId=channel_id,
+            order="date",
+            type="video",
+            maxResults=max_results
+        ).execute()
+
+        video_ids = [item["id"]["videoId"] for item in videos_response["items"]]
+
+        # Get video details to extract URLs
+        videos_details_response = youtube.videos().list(
+            part="id,snippet",
+            id=",".join(video_ids)
+        ).execute()
+
+        video_urls = ["https://www.youtube.com/watch?v=" + item["id"] for item in videos_details_response["items"]]
+        return video_urls
+
+    except HttpError as e:
+        print(f"An HTTP error {e.resp.status} occurred: {e.content}")
+        return []
 
 def main():
     st.write("Welcome to CryptoSpotlight. You can select a social media type bellow and get a content analysis for FREE.")
     st.write("This system is NOT an investment advice, also there may be errors in the system as well.")
-    tabs = ["Youtube", "Twitter"]
+    tabs = ["Youtube", "Twitter", "Influencer Comparison"]
     active_tab = st.radio("Choose your operation:", tabs)
     
     if active_tab == "Twitter":
         analyze_twitter()
-    
     elif active_tab == "Youtube":
         analyze_youtube()
-        
+    elif active_tab == "Influencer Comparison":
+        influencer_comparison()
+
 
 if __name__ == "__main__":
 
     st.set_page_config(page_title='CryptoSpotlight', page_icon='page_icon.jpg', layout="centered", initial_sidebar_state="auto", menu_items=None)
+
+    load_dotenv()
 
     # Main
     try:
