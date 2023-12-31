@@ -7,3 +7,5 @@ textblob==0.17.1
 translators==5.8.9
 python-dotenv==1.0.0
 google-api-python-client==2.111.0
+plotly==5.18.0
+pandas==1.5.3

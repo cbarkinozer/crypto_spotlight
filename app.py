@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 import googleapiclient.discovery
 from googleapiclient.errors import HttpError
 import os
+import plotly.graph_objects as go
+import pandas as pd
 
 last_update_time = datetime.datetime.now() - datetime.timedelta(hours=23)
 coin_dict = utils.coin_dict
@@ -139,11 +141,11 @@ def __analyze_text(text, video_info):
     
     st.warning("Utilizing CoinGecko's free API, might take up to 2-3 minutes to finish.")
     for coin in total_detected_coins:
-        percentage_change = get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
+        percentage_change, _ = __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
         if percentage_change == 0:
             while percentage_change == 0:
                 time.sleep(60)
-                percentage_change = get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
+                percentage_change, _ = __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
         else:
             time.sleep(5)
         color_change = 'green' if percentage_change > 0 else 'red'
@@ -177,7 +179,7 @@ def __analyze_text_chunks(text_chunk, detected_coins):
     return analysis_list
 
 
-def get_coin_price_change(coin_name, start_date, end_date):
+def __get_coin_price_change(coin_name, start_date, end_date):
     
     coin_id = coin_dict.get(coin_name)
 
@@ -218,7 +220,7 @@ def get_coin_price_change(coin_name, start_date, end_date):
     end_price = prices[-1][1]
     percentage_change = ((end_price - start_price) / start_price) * 100
 
-    return percentage_change
+    return percentage_change, prices
 
 
 def influencer_comparison():
@@ -233,12 +235,33 @@ def influencer_comparison():
     st.write(crypto_influencers)                  
     if st.button("Analyze"):
         charted_coin_list, analysis_result_list = __get_influencer_data(crypto_influencers)
+        for coin in charted_coin_list:
+            start_date = str(datetime.datetime.now() - datetime.timedelta(days=90))
+            end_date = datetime.datetime.now()
+            _, prices = __get_coin_price_change(coin, start_date, end_date)
+            analysis_results_by_coin = [analysis for analysis in analysis_result_list if analysis.coin == coin]
+            __plot_coin_chart(coin,prices, analysis_results_by_coin)
 
-
-
+def __plot_coin_chart(coin,prices,analysis_results_by_coin):
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(x=list(range(1, len(prices) + 1)),
+                                 open=[price['open'] for price in prices],
+                                 high=[price['high'] for price in prices],
+                                 low=[price['low'] for price in prices],
+                                 close=[price['close'] for price in prices]))
+    for analysis in analysis_results_by_coin:
+        index = prices.index(analysis.date) + 1
+        fig.add_trace(go.Scatter(x=[index], y=[analysis.price],
+                                 mode='markers',
+                                 marker=dict(color=analysis.color),
+                                 text=analysis.text_chunk,
+                                 name=f"{analysis.influencer}'s Analysis"))
+    fig.update_layout(title=f'Candlestick Chart with Analysis for {coin}',
+                      xaxis_title='Time',
+                      yaxis_title='Price',
+                      xaxis_rangeslider_visible=False)
+    fig.show()  
     
-    
-
 
 def __get_influencer_data(crypto_influencers):
     api_key = os.getenv('API_KEY')
@@ -312,12 +335,12 @@ def get_youtube_videos(api_key, username, max_results=10):
         print(f"An HTTP error {e.resp.status} occurred: {e.content}")
         return []
 
+
 def main():
     st.write("Welcome to CryptoSpotlight. You can select a social media type bellow and get a content analysis for FREE.")
     st.write("This system is NOT an investment advice, also there may be errors in the system as well.")
     tabs = ["Youtube", "Twitter", "Influencer Comparison"]
     active_tab = st.radio("Choose your operation:", tabs)
-    
     if active_tab == "Twitter":
         analyze_twitter()
     elif active_tab == "Youtube":
@@ -327,19 +350,13 @@ def main():
 
 
 if __name__ == "__main__":
-
     st.set_page_config(page_title='CryptoSpotlight', page_icon='page_icon.jpg', layout="centered", initial_sidebar_state="auto", menu_items=None)
-
     load_dotenv()
-
-    # Main
     try:
         main() # streamlit run app.py
     except Exception as e:
         st.error(e)
         print(e)
-    
-
     footer_html = """
         <div style="text-align:center; padding: 10px; border-top: 1px solid #d3d3d3;">
             <p style="font-size: 12px; color: #888;">CryptoSpotlight version 1.1.0. Data powered by CoinGecko</p>
