@@ -44,6 +44,7 @@ def analyze_twitter():
     #    except Exception as e:
     #        st.error(f"Error fetching tweets: {e}")
 
+
 def analyze_youtube():
     global last_update_time, coin_dict
 
@@ -68,6 +69,7 @@ def analyze_youtube():
 
             if not total_detected_coins:
                 st.write("No coins detected.")
+
 
 def __update_coin_list(current_time):
     global last_update_time, coin_dict
@@ -100,12 +102,14 @@ def __get_coins():
         print(f"Failed to fetch data. Status code: {response.status_code}")
         return None
 
+
 def __display_video_info(video_info):
     st.write("Title: ", video_info.metadata['title'])
     st.write("Account: ", video_info.metadata['author'])
     st.write("View Count: ", video_info.metadata['view_count'])
     st.write("Publish Date: ", video_info.metadata['publish_date'])
     st.write("Transcription: ", video_info.page_content.lower())
+
 
 def __analyze_text(text, video_info):
     global coin_list
@@ -147,7 +151,7 @@ def __analyze_text(text, video_info):
 
     return total_detected_coins, analysis_result_list
 
-        
+
 def __analyze_text_chunks(text_chunk, detected_coins):
     analysis = TextBlob(text_chunk)
     
@@ -167,10 +171,11 @@ def __analyze_text_chunks(text_chunk, detected_coins):
         st.write("Text: \n",text_chunk)
         st.write("Detected Coin: ",coin)
         st.write(f"Detected guess: <span style='color:{color}'>{guess}</span>", unsafe_allow_html=True)
-        analysis = utils.Analysis(text_chunk=text_chunk,coin=coin,guess=guess,color=color,date=None)
+        analysis = utils.Analysis(text_chunk=text_chunk,coin=coin,guess=guess,color=color,influencer = None, date=None)
         analysis_list.append(analysis)
         st.markdown("---")
     return analysis_list
+
 
 def get_coin_price_change(coin_name, start_date, end_date):
     
@@ -215,15 +220,27 @@ def get_coin_price_change(coin_name, start_date, end_date):
 
     return percentage_change
 
+
 def influencer_comparison():
+    st.title("Crypto Influencer Comparison")
     crypto_influencers=["cryptokemal","CoinBureau"]
-    st.write(crypto_influencers)
-    __get_influencer_comparison(crypto_influencers)
+    new_influencers = st.text_input("Update influencers (e.g cryptokemal, CoinBureau):")
+    
+    if st.button("Update Influencers") and new_influencers:
+        new_influencers_list = new_influencers.split(',')
+        crypto_influencers = list(set([s.strip() for s in new_influencers_list]))
+
+    st.write(crypto_influencers)                  
+    if st.button("Analyze"):
+        charted_coin_list, analysis_result_list = __get_influencer_data(crypto_influencers)
+
+
+
     
     
 
 
-def __get_influencer_comparison(crypto_influencers):
+def __get_influencer_data(crypto_influencers):
     api_key = os.getenv('API_KEY')
     for influencer_name in crypto_influencers:
         video_urls = get_youtube_videos(api_key, influencer_name, max_results=10)
@@ -231,21 +248,29 @@ def __get_influencer_comparison(crypto_influencers):
             st.warning("Influencer named {influencer_name} not found, continuining.")
             continue
         
+        charted_coin_list = []
+
         for url in video_urls:
             loader = YoutubeLoader.from_youtube_url(url, add_video_info=True, language=["en", "tr"], translation="en")
             doc_list = loader.load()
             video_info = doc_list[0]
-            video_info.metadata['publish_date']
+            channel = video_info.metadata['author']
+            publish_date = video_info.metadata['publish_date']
 
-            current_time = datetime.datetime.now()
-            __update_coin_list(current_time)
+            current_date = datetime.datetime.now()
+            __update_coin_list(current_date)
 
             
             text = video_info.page_content.lower()
             total_detected_coins, analysis_result_list = __analyze_text(text, video_info)
-
+            charted_coin_list.append(total_detected_coins)
+            for analysis in analysis_result_list:
+                analysis.influencer = channel
+                analysis.date =  publish_date
+        
+        charted_coin_list = list(set(charted_coin_list))
+        return charted_coin_list, analysis_result_list
     
-
 
 def get_youtube_videos(api_key, username, max_results=10):
     youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=api_key)
@@ -313,10 +338,11 @@ if __name__ == "__main__":
     except Exception as e:
         st.error(e)
         print(e)
-    # Footer
+    
+
     footer_html = """
         <div style="text-align:center; padding: 10px; border-top: 1px solid #d3d3d3;">
-            <p style="font-size: 12px; color: #888;">Data powered by <a href="https://www.coingecko.com/" target="_blank" style="text-decoration: none; color: #6f6f6f;">CoinGecko</a></p>
+            <p style="font-size: 12px; color: #888;">CryptoSpotlight version 1.1.0. Data powered by CoinGecko</p>
         </div>
     """
     st.markdown(footer_html, unsafe_allow_html=True)
