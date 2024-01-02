@@ -8,14 +8,14 @@ import translators as ts
 import utils
 import time
 from dotenv import load_dotenv
-import googleapiclient.discovery
-from googleapiclient.errors import HttpError
 import os
 import plotly.graph_objects as go
-import pandas as pd
+import google.auth
+from googleapiclient.discovery import build
 
 last_update_time = datetime.datetime.now() - datetime.timedelta(hours=23)
 coin_dict = utils.coin_dict
+crypto_influencers_list = []
 
 def analyze_twitter():
     st.title("Twitter")
@@ -225,22 +225,28 @@ def __get_coin_price_change(coin_name, start_date, end_date):
 
 def influencer_comparison():
     st.title("Crypto Influencer Comparison")
-    crypto_influencers=["cryptokemal","CoinBureau"]
     new_influencers = st.text_input("Update influencers (e.g cryptokemal, CoinBureau):")
-    
-    if st.button("Update Influencers") and new_influencers:
-        new_influencers_list = new_influencers.split(',')
-        crypto_influencers = list(set([s.strip() for s in new_influencers_list]))
 
-    st.write(crypto_influencers)                  
+    if st.button("Update Influencers") and new_influencers:
+        if "," not in new_influencers:
+            new_influencers_list = [new_influencers]
+        else:
+            new_influencers_list = new_influencers.split(',')
+        new_influencers_list = [string.strip() for string in new_influencers_list]
+        crypto_influencers = list(set(new_influencers_list))
+        st.session_state.crypto_influencers_list = crypto_influencers.copy()
+        st.write(st.session_state.crypto_influencers_list)
+
     if st.button("Analyze"):
-        charted_coin_list, analysis_result_list = __get_influencer_data(crypto_influencers)
+        print(st.session_state.crypto_influencers_list)
+        charted_coin_list, analysis_result_list = __get_influencer_data(st.session_state.crypto_influencers_list)
         for coin in charted_coin_list:
             start_date = str(datetime.datetime.now() - datetime.timedelta(days=90))
             end_date = datetime.datetime.now()
             _, prices = __get_coin_price_change(coin, start_date, end_date)
             analysis_results_by_coin = [analysis for analysis in analysis_result_list if analysis.coin == coin]
-            __plot_coin_chart(coin,prices, analysis_results_by_coin)
+            __plot_coin_chart(coin, prices, analysis_results_by_coin)
+
 
 def __plot_coin_chart(coin,prices,analysis_results_by_coin):
     fig = go.Figure()
@@ -266,7 +272,7 @@ def __plot_coin_chart(coin,prices,analysis_results_by_coin):
 def __get_influencer_data(crypto_influencers):
     api_key = os.getenv('API_KEY')
     for influencer_name in crypto_influencers:
-        video_urls = get_youtube_videos(api_key, influencer_name, max_results=10)
+        video_urls = get_last_10_video_links(api_key, influencer_name, max_results=10)
         if video_urls == []:
             st.warning("Influencer named {influencer_name} not found, continuining.")
             continue
@@ -293,47 +299,40 @@ def __get_influencer_data(crypto_influencers):
         
         charted_coin_list = list(set(charted_coin_list))
         return charted_coin_list, analysis_result_list
+
     
+def get_last_10_video_links(api_key, channel_name, max_results):
+    channel_id = get_youtube_channel_id(api_key, channel_name)
 
-def get_youtube_videos(api_key, username, max_results=10):
-    youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=api_key)
+    youtube = build('youtube', 'v3', developerKey=api_key)
 
-    try:
-        # Get channel ID from the username
-        channel_response = youtube.channels().list(
-            part="id",
-            forUsername=username
-        ).execute()
+    # Get the last 10 videos from the channel
+    videos_response = youtube.search().list(
+        channelId=channel_id,
+        type='video',
+        part='id',
+        order='date',
+        maxResults=max_results
+    ).execute()
 
-        if not channel_response.get("items"):
-            print(f"Channel with username '{username}' not found.")
-            return []
+    # Extract video IDs and construct video links
+    video_links = ['https://www.youtube.com/watch?v=' + item['id']['videoId'] for item in videos_response['items']]
+    return video_links
 
-        channel_id = channel_response["items"][0]["id"]
 
-        # Get the last 10 videos from the channel
-        videos_response = youtube.search().list(
-            part="id",
-            channelId=channel_id,
-            order="date",
-            type="video",
-            maxResults=max_results
-        ).execute()
+def get_youtube_channel_id(api_key, channel_name):
+    youtube = build('youtube', 'v3', developerKey=api_key)
 
-        video_ids = [item["id"]["videoId"] for item in videos_response["items"]]
+    # Search for the channel by name
+    search_response = youtube.search().list(
+        q=channel_name,
+        type='channel',
+        part='id'
+    ).execute()
 
-        # Get video details to extract URLs
-        videos_details_response = youtube.videos().list(
-            part="id,snippet",
-            id=",".join(video_ids)
-        ).execute()
-
-        video_urls = ["https://www.youtube.com/watch?v=" + item["id"] for item in videos_details_response["items"]]
-        return video_urls
-
-    except HttpError as e:
-        print(f"An HTTP error {e.resp.status} occurred: {e.content}")
-        return []
+    # Extract the channel ID
+    channel_id = search_response['items'][0]['id']['channelId']
+    return channel_id
 
 
 def main():
@@ -352,11 +351,9 @@ def main():
 if __name__ == "__main__":
     st.set_page_config(page_title='CryptoSpotlight', page_icon='page_icon.jpg', layout="centered", initial_sidebar_state="auto", menu_items=None)
     load_dotenv()
-    try:
-        main() # streamlit run app.py
-    except Exception as e:
-        st.error(e)
-        print(e)
+    
+    main() # streamlit run app.py
+    
     footer_html = """
         <div style="text-align:center; padding: 10px; border-top: 1px solid #d3d3d3;">
             <p style="font-size: 12px; color: #888;">CryptoSpotlight version 1.1.0. Data powered by CoinGecko</p>
