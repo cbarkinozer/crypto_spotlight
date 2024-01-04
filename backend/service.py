@@ -7,8 +7,6 @@ import translators as ts
 import utils
 import time
 import os
-import plotly.graph_objects as go
-import google.auth
 from googleapiclient.discovery import build
 import models
 
@@ -16,7 +14,7 @@ last_update_time = datetime.datetime.now() - datetime.timedelta(hours=23)
 coin_dict = utils.coin_dict
 crypto_influencers_list = []
 
-async def analyze_twitter(username):
+async def analyze_twitter(username: str):
         
     username = username.replace("@","").strip()
 
@@ -37,7 +35,7 @@ async def analyze_twitter(username):
     return tweets
 
 
-async def analyze_youtube(url):
+async def analyze_youtube(url: str):
     global last_update_time, coin_dict
 
     loader = YoutubeLoader.from_youtube_url(url, add_video_info=True, language=["en", "tr"], translation="en")
@@ -45,11 +43,11 @@ async def analyze_youtube(url):
     video_info = doc_list[0]
 
     current_time = datetime.datetime.now()
-    __update_coin_list(current_time)
+    await __update_coin_list(current_time)
 
     text = video_info.page_content.lower()
 
-    total_detected_coins, analysis_result_list, coin_list = __analyze_text(text, video_info)
+    total_detected_coins, analysis_result_list, coin_list = await __analyze_text(text, video_info)
 
     if not total_detected_coins:
         return "No coin is detected!", True
@@ -67,17 +65,17 @@ async def analyze_youtube(url):
 
     return youtube_analysis_response, False
 
-def compare_influencers(influencer_list):
-    charted_coin_list, analysis_result_list = __get_influencer_data(influencer_list)
+async def compare_influencers(influencer_list):
+    charted_coin_list, analysis_result_list = await __get_influencer_data(influencer_list)
     for coin in charted_coin_list:
         start_date = str(datetime.datetime.now() - datetime.timedelta(days=90))
         end_date = datetime.datetime.now()
-        _, prices = __get_coin_price_change(coin, start_date, end_date)
+        _, prices = await __get_coin_price_change(coin, start_date, end_date)
         analysis_results_by_coin = [analysis for analysis in analysis_result_list if analysis.coin == coin]
     return None
 
 
-def __update_coin_list(current_time):
+async def __update_coin_list(current_time):
     print("Updating Coin List...")
     global last_update_time, coin_dict
 
@@ -87,7 +85,7 @@ def __update_coin_list(current_time):
         last_update_time = current_time
 
 
-def __get_coins():
+async def __get_coins():
     print("Getting coins...")
     url = 'https://api.coingecko.com/api/v3/coins/markets'
     params = {
@@ -111,7 +109,7 @@ def __get_coins():
         return None
 
 
-def __analyze_text(text, video_info):
+async def __analyze_text(text, video_info):
     print("Analyzing text...")
     global coin_list
 
@@ -130,18 +128,18 @@ def __analyze_text(text, video_info):
         if detected_coins == []:
             continue
     
-        analysis_list = __analyze_text_chunks(translated_chunk, detected_coins)
+        analysis_list = await __analyze_text_chunks(translated_chunk, detected_coins)
         analysis_result_list.extend(analysis_list)
     
 
     total_detected_coins = list(set(total_detected_coins))
     coin_list = []
     for coin in total_detected_coins:
-        percentage_change, _ = __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
+        percentage_change, _ = await __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
         if percentage_change == 0:
             while percentage_change == 0:
                 time.sleep(60)
-                percentage_change, _ = __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
+                percentage_change, _ = await __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
         else:
             time.sleep(5)
         coin = models.Coin(coin=coin,change_percent=percentage_change)
@@ -151,8 +149,7 @@ def __analyze_text(text, video_info):
     return total_detected_coins, analysis_result_list, coin_list
 
 
-def __analyze_text_chunks(text_chunk, detected_coins):
-    print("Analyzing text chunks...")
+async def __analyze_text_chunks(text_chunk, detected_coins):
     analysis = TextBlob(text_chunk)
     
     if analysis.sentiment.polarity > 0:
@@ -170,7 +167,7 @@ def __analyze_text_chunks(text_chunk, detected_coins):
     return analysis_list
 
 
-def __get_coin_price_change(coin_name, start_date, end_date):
+async def __get_coin_price_change(coin_name, start_date, end_date):
     
     coin_id = coin_dict.get(coin_name)
 
@@ -214,31 +211,10 @@ def __get_coin_price_change(coin_name, start_date, end_date):
     return percentage_change, prices
 
 
-def __plot_coin_chart(coin,prices,analysis_results_by_coin):
-    fig = go.Figure()
-    fig.add_trace(go.Candlestick(x=list(range(1, len(prices) + 1)),
-                                 open=[price['open'] for price in prices],
-                                 high=[price['high'] for price in prices],
-                                 low=[price['low'] for price in prices],
-                                 close=[price['close'] for price in prices]))
-    for analysis in analysis_results_by_coin:
-        index = prices.index(analysis.date) + 1
-        fig.add_trace(go.Scatter(x=[index], y=[analysis.price],
-                                 mode='markers',
-                                 marker=dict(color=analysis.color),
-                                 text=analysis.text_chunk,
-                                 name=f"{analysis.influencer}'s Analysis"))
-    fig.update_layout(title=f'Candlestick Chart with Analysis for {coin}',
-                      xaxis_title='Time',
-                      yaxis_title='Price',
-                      xaxis_rangeslider_visible=False)
-    fig.show()  
-    
-
-def __get_influencer_data(crypto_influencers):
+async def __get_influencer_data(crypto_influencers):
     api_key = os.getenv('API_KEY')
     for influencer_name in crypto_influencers:
-        video_urls = get_last_10_video_links(api_key, influencer_name, max_results=10)
+        video_urls = await get_last_10_video_links(api_key, influencer_name, max_results=10)
         if video_urls == []:
             print("Influencer named {influencer_name} not found, continuining.")
             continue
@@ -257,7 +233,7 @@ def __get_influencer_data(crypto_influencers):
 
             
             text = video_info.page_content.lower()
-            total_detected_coins, analysis_result_list = __analyze_text(text, video_info)
+            total_detected_coins, analysis_result_list = await __analyze_text(text, video_info)
             charted_coin_list.append(total_detected_coins)
             for analysis in analysis_result_list:
                 analysis.influencer = channel
@@ -267,8 +243,8 @@ def __get_influencer_data(crypto_influencers):
         return charted_coin_list, analysis_result_list
 
     
-def get_last_10_video_links(api_key, channel_name, max_results):
-    channel_id = get_youtube_channel_id(api_key, channel_name)
+async def get_last_10_video_links(api_key, channel_name, max_results):
+    channel_id = await get_youtube_channel_id(api_key, channel_name)
 
     youtube = build('youtube', 'v3', developerKey=api_key)
 
@@ -286,7 +262,7 @@ def get_last_10_video_links(api_key, channel_name, max_results):
     return video_links
 
 
-def get_youtube_channel_id(api_key, channel_name):
+async def get_youtube_channel_id(api_key, channel_name):
     youtube = build('youtube', 'v3', developerKey=api_key)
 
     # Search for the channel by name

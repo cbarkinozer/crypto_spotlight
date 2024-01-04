@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Form, HTTPException
+from typing import Annotated
+from fastapi import FastAPI, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import service
@@ -38,7 +39,7 @@ async def analyze_youtube(url: str = Form(...)):
 
 
 @app.post("/influencer_comparison")
-async def influencer_comparison(influencers: list = Form(...)):
+async def influencer_comparison(influencers: Annotated[list[str] | None, Query()] = None):
     load_dotenv('.env')
     answer, is_failed = await service.compare_influencers(influencers)
     if is_failed:
@@ -48,5 +49,7 @@ async def influencer_comparison(influencers: list = Form(...)):
 
 @app.post("/technical_analysis")
 async def technical_analysis(influencer_list: list[str]):
-    answer = service.technical_analysis(influencer_list)
+    answer, is_failed = service.technical_analysis(influencer_list)
+    if is_failed:
+        raise HTTPException(status_code=400, detail="Failed to analyze influencer comparison.")
     return {"result": answer}

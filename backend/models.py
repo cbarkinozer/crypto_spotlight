@@ -1,4 +1,3 @@
-from typing import List
 from pydantic import BaseModel
 
 class Analysis(BaseModel):
@@ -16,6 +15,6 @@ class AnalyzeYoutubeResponse(BaseModel):
     view_count: int
     publish_date: str
     transcription: str
-    coin_names: List[str]
-    analysis: List[Analysis]
-    coin_change: List[Coin]
+    coin_names: list[str]
+    analysis: list[Analysis]
+    coin_change: list[Coin]

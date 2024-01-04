@@ -41,7 +41,25 @@ def __display_video_info(video_info):
     st.write("Transcription: ", video_info.page_content.lower())
 
 
-
+def __plot_coin_chart(coin,prices,analysis_results_by_coin):
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(x=list(range(1, len(prices) + 1)),
+                                 open=[price['open'] for price in prices],
+                                 high=[price['high'] for price in prices],
+                                 low=[price['low'] for price in prices],
+                                 close=[price['close'] for price in prices]))
+    for analysis in analysis_results_by_coin:
+        index = prices.index(analysis.date) + 1
+        fig.add_trace(go.Scatter(x=[index], y=[analysis.price],
+                                 mode='markers',
+                                 marker=dict(color=analysis.color),
+                                 text=analysis.text_chunk,
+                                 name=f"{analysis.influencer}'s Analysis"))
+    fig.update_layout(title=f'Candlestick Chart with Analysis for {coin}',
+                      xaxis_title='Time',
+                      yaxis_title='Price',
+                      xaxis_rangeslider_visible=False)
+    fig.show()  
 
 def influencer_comparison():
     st.title("Crypto Influencer Comparison")
