@@ -1,0 +1,38 @@
+{
+	"info": {
+		"_postman_id": "b7b91189-f4a4-4711-9023-834a8d72bc24",
+		"name": "crypto_spotlight",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "32141722"
+	},
+	"item": [
+		{
+			"name": "/analyze_youtube",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "url",
+							"value": "https://www.youtube.com/watch?v=i2RTXJqy1j8",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "localhost:8000/analyze_youtube",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"analyze_youtube"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

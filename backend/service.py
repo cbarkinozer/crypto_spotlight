@@ -1,4 +1,3 @@
-import streamlit as st
 import snscrape.modules.twitter as sntwitter
 import datetime
 from langchain.document_loaders import YoutubeLoader
@@ -7,73 +6,79 @@ from textblob import TextBlob
 import translators as ts
 import utils
 import time
-from dotenv import load_dotenv
 import os
 import plotly.graph_objects as go
 import google.auth
 from googleapiclient.discovery import build
+import models
 
 last_update_time = datetime.datetime.now() - datetime.timedelta(hours=23)
 coin_dict = utils.coin_dict
 crypto_influencers_list = []
 
-def analyze_twitter():
-    st.title("Twitter")
-    st.warning("Our Twitter service is coming soon...")
-    
-    #username = st.text_input("Enter the username of the Twitter account (e.g @TestUser):")
-    #username = username.replace("@","").strip()
-    username = ""
+async def analyze_twitter(username):
+        
+    username = username.replace("@","").strip()
 
     # Calculate the start and end timestamps for the 24-hour period
     now = datetime.datetime.now()
     end_time = now.strftime("%Y-%m-%d")  # today
-    start_time = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d")  # yesterday
+    start_time = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d")  # yesterday  
 
     # Create a query string with the username and date range
     query = f"from:{username} since:{start_time} until:{end_time}"
 
-    #button_clicked = st.button("Get Analysis!")
-
-    #if button_clicked:
-    #    tweets = []
-    #    st.subheader("Tweets:")
-    #    try:
-    #        for tweet in sntwitter.TwitterSearchScraper(query).get_items():
-    #            tweets.append(tweet.content)
-    #            st.write(tweet)
-    #            st.markdown("---")
-    #    except Exception as e:
-    #        st.error(f"Error fetching tweets: {e}")
+    tweets = []
+    try:
+        for tweet in sntwitter.TwitterSearchScraper(query).get_items():
+            tweets.append(tweet.content)
+    except Exception as e:
+        print(f"Error fetching tweets: {e}")
+    return tweets
 
 
-def analyze_youtube():
+async def analyze_youtube(url):
     global last_update_time, coin_dict
 
-    st.title("Youtube")
-    url = st.text_input("Enter the YouTube video URL (e.g., https://www.youtube.com/watch?v=i2RTXJqy1j8):").strip()
-    button_clicked = st.button("Get Analysis!")
+    loader = YoutubeLoader.from_youtube_url(url, add_video_info=True, language=["en", "tr"], translation="en")
+    doc_list = loader.load()
+    video_info = doc_list[0]
 
-    if button_clicked:
-        loader = YoutubeLoader.from_youtube_url(url, add_video_info=True, language=["en", "tr"], translation="en")
-        doc_list = loader.load()
-        video_info = doc_list[0]
+    current_time = datetime.datetime.now()
+    __update_coin_list(current_time)
 
-        current_time = datetime.datetime.now()
-        __update_coin_list(current_time)
+    text = video_info.page_content.lower()
 
-        text = video_info.page_content.lower()
-        __display_video_info(video_info)
+    total_detected_coins, analysis_result_list, coin_list = __analyze_text(text, video_info)
 
-        with st.spinner("Please wait, analyzing the video..."):
-            st.warning("Only the coins that are in the top 250 by market capitalization are detected by the system.")
-            total_detected_coins, _ = __analyze_text(text, video_info)
+    if not total_detected_coins:
+        return "No coin is detected!", True
+    
+    youtube_analysis_response = models.AnalyzeYoutubeResponse(
+        title=video_info.metadata['title'],
+        author=video_info.metadata['author'],
+        view_count=video_info.metadata['view_count'],
+        publish_date=video_info.metadata['publish_date'],
+        transcription=video_info.page_content.lower(),
+        coin_names=total_detected_coins,
+        analysis=analysis_result_list,
+        coin_change=coin_list
+        )
 
-            if not total_detected_coins:
-                st.write("No coins detected.")
+    return youtube_analysis_response, False
+
+def compare_influencers(influencer_list):
+    charted_coin_list, analysis_result_list = __get_influencer_data(influencer_list)
+    for coin in charted_coin_list:
+        start_date = str(datetime.datetime.now() - datetime.timedelta(days=90))
+        end_date = datetime.datetime.now()
+        _, prices = __get_coin_price_change(coin, start_date, end_date)
+        analysis_results_by_coin = [analysis for analysis in analysis_result_list if analysis.coin == coin]
+    return None
 
 
 def __update_coin_list(current_time):
+    print("Updating Coin List...")
     global last_update_time, coin_dict
 
     time_difference = current_time - last_update_time
@@ -83,7 +88,8 @@ def __update_coin_list(current_time):
 
 
 def __get_coins():
-    url = f'https://api.coingecko.com/api/v3/coins/markets'
+    print("Getting coins...")
+    url = 'https://api.coingecko.com/api/v3/coins/markets'
     params = {
         'vs_currency': 'usd',
         'order': 'market_cap_desc',
@@ -105,27 +111,15 @@ def __get_coins():
         return None
 
 
-def __display_video_info(video_info):
-    st.write("Title: ", video_info.metadata['title'])
-    st.write("Account: ", video_info.metadata['author'])
-    st.write("View Count: ", video_info.metadata['view_count'])
-    st.write("Publish Date: ", video_info.metadata['publish_date'])
-    st.write("Transcription: ", video_info.page_content.lower())
-
-
 def __analyze_text(text, video_info):
+    print("Analyzing text...")
     global coin_list
 
     total_detected_coins = []
     analysis_result_list = []
     chunk_size = 500
 
-    progress_bar = st.progress(0)
-
     for i in range(0, len(text), chunk_size):
-        progress_percentage = min(100, (i + chunk_size) / len(text) * 100)
-        progress_fraction = progress_percentage / 100
-        progress_bar.progress(progress_fraction)
 
         translated_chunk = ts.translate_text(text[i:i + chunk_size], translator="google", to_language="en").lower()
         
@@ -133,13 +127,15 @@ def __analyze_text(text, video_info):
 
         total_detected_coins.extend(detected_coins)
 
-        if detected_coins:
-            analysis_list = __analyze_text_chunks(translated_chunk, detected_coins)
-            analysis_result_list.append(analysis_list)
+        if detected_coins == []:
+            continue
     
+        analysis_list = __analyze_text_chunks(translated_chunk, detected_coins)
+        analysis_result_list.extend(analysis_list)
+    
+
     total_detected_coins = list(set(total_detected_coins))
-    
-    st.warning("Utilizing CoinGecko's free API, might take up to 2-3 minutes to finish.")
+    coin_list = []
     for coin in total_detected_coins:
         percentage_change, _ = __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
         if percentage_change == 0:
@@ -148,34 +144,29 @@ def __analyze_text(text, video_info):
                 percentage_change, _ = __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
         else:
             time.sleep(5)
-        color_change = 'green' if percentage_change > 0 else 'red'
-        st.write(f"{coin}'s value change since then: <span style='color:{color_change}'>%{percentage_change}</span>", unsafe_allow_html=True)
+        coin = models.Coin(coin=coin,change_percent=percentage_change)
+        coin_list.append(coin)
+        
 
-    return total_detected_coins, analysis_result_list
+    return total_detected_coins, analysis_result_list, coin_list
 
 
 def __analyze_text_chunks(text_chunk, detected_coins):
+    print("Analyzing text chunks...")
     analysis = TextBlob(text_chunk)
     
     if analysis.sentiment.polarity > 0:
         guess = "Bullish"
-        color = "green"
     elif analysis.sentiment.polarity < 0:
         guess = "Bearish"
-        color = "red"
     else:
         guess = "Neutral"
-        color = "grey"
     
     analysis_list = []
     
     for coin in detected_coins:
-        st.write("Text: \n",text_chunk)
-        st.write("Detected Coin: ",coin)
-        st.write(f"Detected guess: <span style='color:{color}'>{guess}</span>", unsafe_allow_html=True)
-        analysis = utils.Analysis(text_chunk=text_chunk,coin=coin,guess=guess,color=color,influencer = None, date=None)
+        analysis = models.Analysis(text_chunk=text_chunk,coin=coin,guess=guess)
         analysis_list.append(analysis)
-        st.markdown("---")
     return analysis_list
 
 
@@ -223,31 +214,6 @@ def __get_coin_price_change(coin_name, start_date, end_date):
     return percentage_change, prices
 
 
-def influencer_comparison():
-    st.title("Crypto Influencer Comparison")
-    new_influencers = st.text_input("Update influencers (e.g cryptokemal, CoinBureau):")
-
-    if st.button("Update Influencers") and new_influencers:
-        if "," not in new_influencers:
-            new_influencers_list = [new_influencers]
-        else:
-            new_influencers_list = new_influencers.split(',')
-        new_influencers_list = [string.strip() for string in new_influencers_list]
-        crypto_influencers = list(set(new_influencers_list))
-        st.session_state.crypto_influencers_list = crypto_influencers.copy()
-        st.write(st.session_state.crypto_influencers_list)
-
-    if st.button("Analyze"):
-        print(st.session_state.crypto_influencers_list)
-        charted_coin_list, analysis_result_list = __get_influencer_data(st.session_state.crypto_influencers_list)
-        for coin in charted_coin_list:
-            start_date = str(datetime.datetime.now() - datetime.timedelta(days=90))
-            end_date = datetime.datetime.now()
-            _, prices = __get_coin_price_change(coin, start_date, end_date)
-            analysis_results_by_coin = [analysis for analysis in analysis_result_list if analysis.coin == coin]
-            __plot_coin_chart(coin, prices, analysis_results_by_coin)
-
-
 def __plot_coin_chart(coin,prices,analysis_results_by_coin):
     fig = go.Figure()
     fig.add_trace(go.Candlestick(x=list(range(1, len(prices) + 1)),
@@ -274,7 +240,7 @@ def __get_influencer_data(crypto_influencers):
     for influencer_name in crypto_influencers:
         video_urls = get_last_10_video_links(api_key, influencer_name, max_results=10)
         if video_urls == []:
-            st.warning("Influencer named {influencer_name} not found, continuining.")
+            print("Influencer named {influencer_name} not found, continuining.")
             continue
         
         charted_coin_list = []
@@ -333,30 +299,3 @@ def get_youtube_channel_id(api_key, channel_name):
     # Extract the channel ID
     channel_id = search_response['items'][0]['id']['channelId']
     return channel_id
-
-
-def main():
-    st.write("Welcome to CryptoSpotlight. You can select a social media type bellow and get a content analysis for FREE.")
-    st.write("This system is NOT an investment advice, also there may be errors in the system as well.")
-    tabs = ["Youtube", "Twitter", "Influencer Comparison"]
-    active_tab = st.radio("Choose your operation:", tabs)
-    if active_tab == "Twitter":
-        analyze_twitter()
-    elif active_tab == "Youtube":
-        analyze_youtube()
-    elif active_tab == "Influencer Comparison":
-        influencer_comparison()
-
-
-if __name__ == "__main__":
-    st.set_page_config(page_title='CryptoSpotlight', page_icon='page_icon.jpg', layout="centered", initial_sidebar_state="auto", menu_items=None)
-    load_dotenv()
-    
-    main() # streamlit run app.py
-    
-    footer_html = """
-        <div style="text-align:center; padding: 10px; border-top: 1px solid #d3d3d3;">
-            <p style="font-size: 12px; color: #888;">CryptoSpotlight version 1.1.0. Data powered by CoinGecko</p>
-        </div>
-    """
-    st.markdown(footer_html, unsafe_allow_html=True)
