@@ -39,9 +39,9 @@ async def analyze_youtube(url: str = Form(...)):
 
 
 @app.post("/influencer_comparison")
-async def influencer_comparison(influencers: Annotated[list[str] | None, Query()] = None):
+async def influencer_comparison(influencers: Annotated[list[str] | None, Query()] = None, video_count= Form(...)):
     load_dotenv('.env')
-    answer, is_failed = await service.compare_influencers(influencers)
+    answer, is_failed = await service.compare_influencers(influencer_list=influencers,video_count=video_count)
     if is_failed:
         raise HTTPException(status_code=400, detail="Failed to analyze influencer comparison.")
     return {"result": answer}

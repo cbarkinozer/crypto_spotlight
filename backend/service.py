@@ -17,15 +17,12 @@ crypto_influencers_list = []
 async def analyze_twitter(username: str):
         
     username = username.replace("@","").strip()
-
     # Calculate the start and end timestamps for the 24-hour period
     now = datetime.datetime.now()
     end_time = now.strftime("%Y-%m-%d")  # today
     start_time = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%d")  # yesterday  
-
     # Create a query string with the username and date range
     query = f"from:{username} since:{start_time} until:{end_time}"
-
     tweets = []
     try:
         for tweet in sntwitter.TwitterSearchScraper(query).get_items():
@@ -46,7 +43,6 @@ async def analyze_youtube(url: str):
     await __update_coin_list(current_time)
 
     text = video_info.page_content.lower()
-
     total_detected_coins, analysis_result_list, coin_list = await __analyze_text(text, video_info)
 
     if not total_detected_coins:
@@ -65,14 +61,19 @@ async def analyze_youtube(url: str):
 
     return youtube_analysis_response, False
 
-async def compare_influencers(influencer_list):
-    charted_coin_list, analysis_result_list = await __get_influencer_data(influencer_list)
+async def compare_influencers(influencer_list, video_count):
+    charted_coin_list, analysis_result_list = await __get_influencer_data(influencer_list,video_count)
+    response = []
     for coin in charted_coin_list:
         start_date = str(datetime.datetime.now() - datetime.timedelta(days=90))
         end_date = datetime.datetime.now()
         _, prices = await __get_coin_price_change(coin, start_date, end_date)
         analysis_results_by_coin = [analysis for analysis in analysis_result_list if analysis.coin == coin]
-    return None
+        print(coin)
+        print(prices)
+        print(analysis_results_by_coin)
+        response.append(models.CompareInfluencerResponse(coin=coin,prices=prices,analysis_results_by_coin=analysis_results_by_coin))
+    return response, False
 
 
 async def __update_coin_list(current_time):
@@ -120,11 +121,8 @@ async def __analyze_text(text, video_info):
     for i in range(0, len(text), chunk_size):
 
         translated_chunk = ts.translate_text(text[i:i + chunk_size], translator="google", to_language="en").lower()
-        
         detected_coins = [coin for coin in coin_dict.keys() if f' {coin} ' in translated_chunk]
-
         total_detected_coins.extend(detected_coins)
-
         if detected_coins == []:
             continue
     
@@ -133,23 +131,22 @@ async def __analyze_text(text, video_info):
     
 
     total_detected_coins = list(set(total_detected_coins))
-    coin_list = []
-    for coin in total_detected_coins:
-        percentage_change, _ = await __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
-        if percentage_change == 0:
-            while percentage_change == 0:
-                time.sleep(60)
-                percentage_change, _ = await __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
-        else:
-            time.sleep(5)
-        coin = models.Coin(coin=coin,change_percent=percentage_change)
-        coin_list.append(coin)
-        
-
+    coin_list = await calculate_price_change_for_detected_coins(total_detected_coins=total_detected_coins, video_info=video_info)
     return total_detected_coins, analysis_result_list, coin_list
 
 
+async def calculate_price_change_for_detected_coins(total_detected_coins,video_info):
+    print("Calculating price change for detected_coins...")
+    coin_list = []
+    for coin in total_detected_coins:
+        percentage_change, _ = await __get_coin_price_change(coin, video_info.metadata['publish_date'], datetime.datetime.now())
+        coin = models.Coin(coin=coin,change_percent=percentage_change)
+        coin_list.append(coin)
+    return coin_list
+
+
 async def __analyze_text_chunks(text_chunk, detected_coins):
+    print("Analyzing text chunks...")
     analysis = TextBlob(text_chunk)
     
     if analysis.sentiment.polarity > 0:
@@ -168,6 +165,7 @@ async def __analyze_text_chunks(text_chunk, detected_coins):
 
 
 async def __get_coin_price_change(coin_name, start_date, end_date):
+    print(f"Getting {coin_name} price change...")
     
     coin_id = coin_dict.get(coin_name)
 
@@ -193,12 +191,24 @@ async def __get_coin_price_change(coin_name, start_date, end_date):
         'to': end_timestamp,
     }
 
-    # Send the API request
-    response = requests.get(endpoint, params=params)
-    data = response.json()
-
-    if ('prices' in data and data['prices']==[]) or ('prices' not in data):
-        return 0
+    is_limit_exceed = True
+    sleep_time = 30
+    failure_check = 0
+    
+    while is_limit_exceed == True:
+        response = requests.get(endpoint, params=params)
+        data = response.json()
+        if 'prices' in data and data['prices']!=[]:
+            time.sleep(5) # little wait time for small amount of coins to pass smoothly without exceeding
+            is_limit_exceed = False
+        else:
+            print(f"Free API limit exceed for {coin_name}, waiting for {sleep_time} seconds...") 
+            time.sleep(sleep_time)
+            if failure_check >4:
+                print("CoinGecko API Failure...")
+                is_limit_exceed = False
+            else:
+                failure_check += 1
 
     # Extract prices from the response data
     prices = data['prices']
@@ -211,12 +221,13 @@ async def __get_coin_price_change(coin_name, start_date, end_date):
     return percentage_change, prices
 
 
-async def __get_influencer_data(crypto_influencers):
+async def __get_influencer_data(crypto_influencers, video_count=2):
+    print("Getting influencer data...")
     api_key = os.getenv('API_KEY')
     for influencer_name in crypto_influencers:
-        video_urls = await get_last_10_video_links(api_key, influencer_name, max_results=10)
+        video_urls = await get_last_n_video_links(api_key, influencer_name, video_count)
         if video_urls == []:
-            print("Influencer named {influencer_name} not found, continuining.")
+            print(f"Influencer named {influencer_name} not found, continuining.")
             continue
         
         charted_coin_list = []
@@ -225,30 +236,26 @@ async def __get_influencer_data(crypto_influencers):
             loader = YoutubeLoader.from_youtube_url(url, add_video_info=True, language=["en", "tr"], translation="en")
             doc_list = loader.load()
             video_info = doc_list[0]
-            channel = video_info.metadata['author']
-            publish_date = video_info.metadata['publish_date']
 
             current_date = datetime.datetime.now()
-            __update_coin_list(current_date)
+            await __update_coin_list(current_date)
 
             
             text = video_info.page_content.lower()
-            total_detected_coins, analysis_result_list = await __analyze_text(text, video_info)
-            charted_coin_list.append(total_detected_coins)
-            for analysis in analysis_result_list:
-                analysis.influencer = channel
-                analysis.date =  publish_date
+            total_detected_coins, analysis_result_list, _ = await __analyze_text(text, video_info)
+            charted_coin_list.extend(total_detected_coins)
         
         charted_coin_list = list(set(charted_coin_list))
         return charted_coin_list, analysis_result_list
 
     
-async def get_last_10_video_links(api_key, channel_name, max_results):
+async def get_last_n_video_links(api_key, channel_name, max_results):
+    print(f"Getting last {max_results} video links...")
     channel_id = await get_youtube_channel_id(api_key, channel_name)
 
     youtube = build('youtube', 'v3', developerKey=api_key)
 
-    # Get the last 10 videos from the channel
+    # Get the last n videos from the channel
     videos_response = youtube.search().list(
         channelId=channel_id,
         type='video',
@@ -263,6 +270,7 @@ async def get_last_10_video_links(api_key, channel_name, max_results):
 
 
 async def get_youtube_channel_id(api_key, channel_name):
+    print(f"Getting {channel_name} channel's id...")
     youtube = build('youtube', 'v3', developerKey=api_key)
 
     # Search for the channel by name

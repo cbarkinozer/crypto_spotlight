@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import List, Tuple
 
 class Analysis(BaseModel):
     text_chunk: str
@@ -18,3 +19,8 @@ class AnalyzeYoutubeResponse(BaseModel):
     coin_names: list[str]
     analysis: list[Analysis]
     coin_change: list[Coin]
+
+class CompareInfluencerResponse(BaseModel):
+    coin: str
+    prices: List[Tuple[int, float]]
+    analysis_results_by_coin: list[Analysis]
