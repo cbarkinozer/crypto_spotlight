@@ -1,5 +1,7 @@
 import streamlit as st
 import datetime
+import plotly.graph_objects as go
+import requests
 
 
 def analyze_twitter():
@@ -41,6 +43,26 @@ def __display_video_info(video_info):
     st.write("Transcription: ", video_info.page_content.lower())
 
 
+def influencer_comparison():
+    st.title("Crypto Influencer Comparison")
+    new_influencers = st.text_input("Update influencers (e.g cryptokemal, CoinBureau):")
+
+    if st.button("Update Influencers") and new_influencers:
+        if "," not in new_influencers:
+            new_influencers_list = [new_influencers]
+        else:
+            new_influencers_list = new_influencers.split(',')
+        new_influencers_list = [string.strip() for string in new_influencers_list]
+        crypto_influencers = list(set(new_influencers_list))
+        st.session_state.crypto_influencers_list = crypto_influencers.copy()
+        st.write(st.session_state.crypto_influencers_list)
+
+    #if st.button("Analyze"):
+        # coin,prices,analysis_results_by_coin =  request
+        #fig = __plot_coin_chart(coin=coin,prices=prices,analysis_results_by_coin=analysis_results_by_coin)
+        # st.plotly_chart(fig)
+
+
 def __plot_coin_chart(coin,prices,analysis_results_by_coin):
     fig = go.Figure()
     fig.add_trace(go.Candlestick(x=list(range(1, len(prices) + 1)),
@@ -59,25 +81,7 @@ def __plot_coin_chart(coin,prices,analysis_results_by_coin):
                       xaxis_title='Time',
                       yaxis_title='Price',
                       xaxis_rangeslider_visible=False)
-    fig.show()  
-
-def influencer_comparison():
-    st.title("Crypto Influencer Comparison")
-    new_influencers = st.text_input("Update influencers (e.g cryptokemal, CoinBureau):")
-
-    if st.button("Update Influencers") and new_influencers:
-        if "," not in new_influencers:
-            new_influencers_list = [new_influencers]
-        else:
-            new_influencers_list = new_influencers.split(',')
-        new_influencers_list = [string.strip() for string in new_influencers_list]
-        crypto_influencers = list(set(new_influencers_list))
-        st.session_state.crypto_influencers_list = crypto_influencers.copy()
-        st.write(st.session_state.crypto_influencers_list)
-
-    #if st.button("Analyze"):
-        # request
-    return None
+    return fig 
 
 
 def main():

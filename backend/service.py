@@ -69,9 +69,6 @@ async def compare_influencers(influencer_list, video_count):
         end_date = datetime.datetime.now()
         _, prices = await __get_coin_price_change(coin, start_date, end_date)
         analysis_results_by_coin = [analysis for analysis in analysis_result_list if analysis.coin == coin]
-        print(coin)
-        print(prices)
-        print(analysis_results_by_coin)
         response.append(models.CompareInfluencerResponse(coin=coin,prices=prices,analysis_results_by_coin=analysis_results_by_coin))
     return response, False
 
