@@ -2,8 +2,8 @@ import streamlit as st
 import datetime
 import plotly.graph_objects as go
 import requests
-import talib
-
+import pandas as pd
+import pandas_ta as ta
 
 def analyze_twitter():
     st.title("Twitter")
@@ -100,34 +100,55 @@ def technical_analysis():
                     low = json_data.get("low", None)
                     close = json_data.get("close", None)
                     
-                    # Create a Plotly candlestick chart
-                    fig = go.Figure(data=[go.Candlestick(x=timestamp,
-                                    open=open,
-                                    high=high,
-                                    low=low,
-                                    close=close)])
-
-                    # Add Simple Moving Average (SMA)
-                    fig.add_trace(go.Scatter(x=timestamp,
-                                             y=json_data.get("sma", None),
-                                             mode='lines',
-                                             name='SMA'))
-
-                    # Add Exponential Moving Average (EMA)
-                    fig.add_trace(go.Scatter(x=timestamp,
-                                             y=json_data.get("ema", None),
-                                             mode='lines',
-                                             name='EMA'))
-
+                    data = pd.DataFrame({
+                        'timestamp': timestamp,
+                        'open': open,
+                        'high': high,
+                        'low': low,
+                        'close': close
+                    })
+                
+                    # Calculate Exponential Moving Averages (EMAs)
+                    data['ema_short'] = ta.ema(data['close'], length=9)
+                    data['ema_long'] = ta.ema(data['close'], length=21)
+                    # Generate signals based on EMA crossover
+                    data['signal'] = ta.crossover(data['ema_short'], data['ema_long'])
+                    # Create candlestick chart
+                    fig = go.Figure(data=[go.Candlestick(x=data['timestamp'],
+                                                        open=data['open'],
+                                                        high=data['high'],
+                                                        low=data['low'],
+                                                        close=data['close'])])
+                    # Add EMA indicators
+                    fig.add_trace(go.Scatter(x=data['timestamp'],
+                                            y=data['ema_short'],
+                                            mode='lines',
+                                            name='Short EMA'))
+                    fig.add_trace(go.Scatter(x=data['timestamp'],
+                                            y=data['ema_long'],
+                                            mode='lines',
+                                            name='Long EMA'))
+                    # Add Buy/Sell signals
+                    buy_signals = data[data['signal'] == 1]
+                    sell_signals = data[data['signal'] == -1]
+                    fig.add_trace(go.Scatter(x=buy_signals['timestamp'],
+                                            y=buy_signals['close'],
+                                            mode='markers',
+                                            marker=dict(color='green', size=10),
+                                            name='Buy Signal'))
+                    fig.add_trace(go.Scatter(x=sell_signals['timestamp'],
+                                            y=sell_signals['close'],
+                                            mode='markers',
+                                            marker=dict(color='red', size=10),
+                                            name='Sell Signal'))
                     # Customize the chart
-                    fig.update_layout(title=f'{symbol.capitalize()} Candlestick Chart with SMA and EMA',
-                                      xaxis_title='Date',
-                                      yaxis_title='Price (USD)',
-                                      xaxis_rangeslider_visible=False)
+                    fig.update_layout(title=f'{symbol.capitalize()} Candlestick Chart with Trend-Following Strategy',
+                                    xaxis_title='Date',
+                                    yaxis_title='Price (USD)',
+                                    xaxis_rangeslider_visible=False)
                     st.plotly_chart(fig)
         except requests.exceptions.RequestException as e:
             st.error(f"An error occurred: {e}")
-
 
 
 def __plot_coin_chart(coin,prices,analysis_results_by_coin):
