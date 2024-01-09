@@ -1,19 +1,10 @@
 from typing import Annotated
 from fastapi import FastAPI, Form, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import service
 
 
 app = FastAPI()
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.get("/")
@@ -48,8 +39,8 @@ async def influencer_comparison(influencers: Annotated[list[str] | None, Query()
 
 
 @app.post("/technical_analysis")
-async def technical_analysis(influencer_list: list[str]):
-    answer, is_failed = service.technical_analysis(influencer_list)
+async def technical_analysis(coin_name: str, days: int):
+    answer, is_failed = await service.technical_analysis(coin_name, days)
     if is_failed:
         raise HTTPException(status_code=400, detail="Failed to analyze influencer comparison.")
     return {"result": answer}

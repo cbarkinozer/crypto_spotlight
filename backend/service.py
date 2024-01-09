@@ -72,6 +72,36 @@ async def compare_influencers(influencer_list, video_count):
         response.append(models.CompareInfluencerResponse(coin=coin,prices=prices,analysis_results_by_coin=analysis_results_by_coin))
     return response, False
 
+async def technical_analysis(coin_name, days=90):
+
+    coin_id = coin_dict.get(coin_name)
+    
+    base_url = "https://api.coingecko.com/api/v3"
+    endpoint = f"/coins/{coin_id}/market_chart"
+    
+    params = {
+        'vs_currency': 'usd',
+        'days': days,
+        'interval': 'daily',
+    }
+
+    response = requests.get(base_url + endpoint, params=params)
+    data = response.json()
+
+    timestamps = data['timestamps']
+    prices = data['prices']
+
+    df = {
+        'symbol': coin_id,
+        'timestamp': [datetime.utcfromtimestamp(ts / 1000) for ts in timestamps],
+        'open': [price[1] for price in prices],
+        'high': [price[2] for price in prices],
+        'low': [price[3] for price in prices],
+        'close': [price[4] for price in prices],
+    }
+
+    return df, False
+
 
 async def __update_coin_list(current_time):
     print("Updating Coin List...")
@@ -79,11 +109,11 @@ async def __update_coin_list(current_time):
 
     time_difference = current_time - last_update_time
     if time_difference.total_seconds() >= 24 * 60 * 60:
-        coin_dict = __get_coins()
+        coin_dict = __update_coin_dict()
         last_update_time = current_time
 
 
-async def __get_coins():
+async def __update_coin_dict():
     print("Getting coins...")
     url = 'https://api.coingecko.com/api/v3/coins/markets'
     params = {
