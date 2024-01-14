@@ -9,6 +9,7 @@ import time
 import os
 from googleapiclient.discovery import build
 import models
+import pandas_ta as ta
 
 last_update_time = datetime.datetime.now() - datetime.timedelta(hours=23)
 coin_dict = utils.coin_dict
@@ -73,7 +74,14 @@ async def compare_influencers(influencer_list, video_count):
     return response, False
 
 async def technical_analysis(coin_name, days=90):
+    dataframe = __technical_analysis_data(coin_name=coin_name, days=days)
+    dataframe = __apply_technical_indicators(dataframe)
+    return dataframe,False
 
+
+    
+
+async def __technical_analysis_data(coin_name, days):
     coin_id = coin_dict.get(coin_name)
     
     base_url = "https://api.coingecko.com/api/v3"
@@ -100,7 +108,26 @@ async def technical_analysis(coin_name, days=90):
         'close': [price[4] for price in prices],
     }
 
-    return df, False
+    return df
+
+async def __apply_technical_indicators(df):
+    # Add 50-day and 200-day moving averages
+    df['ma50'] = ta.sma(df['close'], length=50)
+    df['ma200'] = ta.sma(df['close'], length=200)
+
+    # Add Relative Strength Index (RSI)
+    df['rsi'] = ta.rsi(df['close'], length=14)
+
+    # Add Moving Average Convergence Divergence (MACD)
+    df['macd'] = ta.macd(df['close'])
+
+    # Add Bollinger Bands
+    df['bb_upper'], df['bb_lower'] = ta.bbands(df['close'])
+    # Generate buy and sell signals based on MA crossover
+    df['signal'] = 0
+    df.loc[df['ma50'] > df['ma200'], 'signal'] = 1  # Buy signal
+    df.loc[df['ma50'] < df['ma200'], 'signal'] = -1  # Sell signal
+    return df
 
 
 async def __update_coin_list(current_time):

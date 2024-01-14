@@ -40,7 +40,7 @@ def analyze_youtube():
 
 def influencer_comparison():
     st.title("Crypto Influencer Comparison")
-    new_influencers = st.text_input("Update influencers (e.g cryptokemal, CoinBureau):")
+    new_influencers = st.text_input("Update influencers (e.g BuCoinNedir):")
 
     if st.button("Update Influencers") and new_influencers:
         if "," not in new_influencers:
@@ -54,7 +54,7 @@ def influencer_comparison():
 
     if st.button("Analyze"):
         url = 'http://127.0.0.1:8000/influencer_comparison'
-        params = {'influencers': 'BuCoinNedir'}
+        params = {'influencers': st.session_state.crypto_influencers_list}
         files = {'video_count': (None, '2')} 
         try:    
             with st.spinner("Please wait, analyzing the video..."):
@@ -62,15 +62,30 @@ def influencer_comparison():
                 response = requests.post(url, params=params, files=files)
                 if response.status_code == 200:
                     json_data = response.json()
+                    st.write(json_data)
 
-                    # Accessing the value of analysis_results_by_coin
-                    coin = json_data.get("coin", [])
-                    prices = json_data.get("prices", [])
-                    analysis_results_by_coin = json_data.get("analysis_results_by_coin", [])
+                    coin_list = []
+                    prices_list = []
+                    analysis_results_by_coin_list = []
+
+                    for result in json_data["result"]:
+                        for analysis_result in result["analysis_results_by_coin"]:
+                            analysis_results_by_coin_list.append(analysis_result)
+                        for coin in result["coin"]:
+                            coin_list.append(coin)
+                        for prices in result["prices"]:
+                            prices_list.append(prices)
+
+                    print(coin)
+
+                    # Much more complex
                     
                     for _ in coin:
-                        fig = __plot_coin_chart(coin=coin,prices=prices,analysis_results_by_coin=analysis_results_by_coin)
+                        fig = __plot_coin_chart(coin=coin_list,prices=prices_list,analysis_results_by_coin=analysis_results_by_coin_list)
                         st.plotly_chart(fig)
+                else:
+                    json_data = response.json()
+                    st.error(json_data)
         except requests.exceptions.RequestException as e:
             st.error(f"An error occurred: {e}")
 

@@ -1,2 +1,14 @@
 fastapi==0.95.2
 uvicorn==0.22.0
+
+snscrape==0.7.0.20230622
+langchain==0.0.249
+pytube==15.0.0
+youtube-transcript-api==0.6.2
+textblob==0.17.1
+translators==5.8.9
+python-dotenv==1.0.0
+google-api-python-client==2.111.0
+plotly==5.18.0
+pandas==1.5.3
+pandas-ta==0.3.14b0
